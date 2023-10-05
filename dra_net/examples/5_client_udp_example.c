@@ -10,7 +10,7 @@ int main(int argc, char **argv)
 	dra_socket_t client;
 	dra_set_ipv4(&client);
 	dra_set_socket_udp(&client);
-	dra_connect_to_address(&client,"localhost","27015");
+	dra_connect_to_address(&client,argv[1],"27015");
 	
 	char msg[512] = "hello this is a test.\n";
 	dra_send(&client,msg,512);
