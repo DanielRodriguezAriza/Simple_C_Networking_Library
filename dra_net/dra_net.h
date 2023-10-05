@@ -96,6 +96,11 @@ int dra_set_socket_udp(dra_socket_t *sock);
 int dra_connect_to_address(dra_socket_t *sock, char const *ip, char const *port);
 int dra_host_on_port(dra_socket_t *sock, char const *port);
 
+void dra_set_ipv(dra_socket_t *sock, int ipv);
+void dra_set_ipv4(dra_socket_t *sock);
+void dra_set_ipv6(dra_socket_t *sock);
+void dra_set_ipvall(dra_socket_t *sock);
+
 #ifdef __cplusplus
 }
 #endif

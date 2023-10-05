@@ -5,12 +5,16 @@
 extern "C" {
 #endif
 
-typedef struct dra_socket_t
-{
+typedef struct {
+	struct addrinfo hints, *serverinfo, *ptr;
+} dra_address_info_t;
+
+typedef struct {
 	DRA_SOCKET socket_descriptor;
 	struct sockaddr_storage socket_address;
 	socklen_t socket_address_len;
 	int socket_type;
+	int ip_version;
 } dra_socket_t;
 
 

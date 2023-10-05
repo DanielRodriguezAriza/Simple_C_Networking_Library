@@ -66,7 +66,7 @@ int dra_create_socket(dra_socket_t *sock, int sock_type, char const *ip, char co
 	}
 	
 	sock->socket_descriptor = socket(res->ai_family,res->ai_socktype,res->ai_protocol);
-	if(status < 0)
+	if(sock->socket_descriptor < 0)
 	{
 		printf("Creating socket failed.\n");
 		return -1;
@@ -85,6 +85,11 @@ int dra_create_tcp_socket(dra_socket_t *sock, char const *ip, char const *port)
 	return dra_create_socket(sock,SOCK_STREAM,ip,port);
 }
 
+int dra_create_udp_socket(dra_socket_t *sock, char const *ip, char const *port)
+{
+	return dra_create_socket(sock,SOCK_DGRAM,ip,port);
+}
+
 int dra_set_socket_blocking_mode(dra_socket_t *sock, char is_blocking)
 {
 #ifdef _WIN32
@@ -96,11 +101,6 @@ int dra_set_socket_blocking_mode(dra_socket_t *sock, char is_blocking)
 	flags = is_blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK);
 	return (fcntl(sock->socket_descriptor, F_SETFL, flags) == 0) ? 0 : -1;
 #endif
-}
-
-int dra_create_udp_socket(dra_socket_t *sock, char const *ip, char const *port)
-{
-	return dra_create_socket(sock,SOCK_DGRAM,ip,port);
 }
 
 int dra_close_socket(dra_socket_t *sock)
@@ -151,6 +151,7 @@ int dra_send(dra_socket_t *sock, void *buffer, size_t buffer_size)
 		return sendto(sock->socket_descriptor,buffer,buffer_size,0,(struct sockaddr*)&(sock->socket_address),sock->socket_address_len);
 	}
 }
+
 int dra_recv(dra_socket_t *sock, void *buffer, size_t buffer_size)
 {
 	if(sock->socket_type == SOCK_STREAM)
@@ -159,7 +160,8 @@ int dra_recv(dra_socket_t *sock, void *buffer, size_t buffer_size)
 	}
 	else
 	{
-		return recvfrom(sock->socket_descriptor,buffer,buffer_size,0,(struct sockaddr*)&(sock->socket_address),&sock->socket_address_len);
+		//return recvfrom(sock->socket_descriptor,buffer,buffer_size,0,(struct sockaddr*)&(sock->socket_address),&sock->socket_address_len);
+		return recvfrom(sock->socket_descriptor,buffer,buffer_size,0,NULL,NULL);
 	}
 }
 
@@ -211,29 +213,12 @@ int dra_set_socket_udp(dra_socket_t *sock)
 	dra_set_socket_type(sock,SOCK_DGRAM);
 }
 
-/*Currently has a problem in windows if you define DRA_NET_USE_WINDOWS_HACK when using DNS resolution where addresses such as "localhost", where it first tries to connect through IPv6*/
 int dra_connect_to_address(dra_socket_t *sock, char const *ip, char const *port)
 {
-	/*Planned for future implementation: test if the address is an IPv4, then test if it's an IPv6, then test if it can be translated from IPv4 to IPv6 and then attempt DNS resolution. This will prevent the need for the hack in dra_host_on_port for windows so that IPv6 sockets can be compatible with IPv4 connections without having to give priority to generating an IPv4 socket in windows This could slow down address resolution, so this idea might be scrapped in the future.*/
-	/*
-	struct in_addr ipv4_addr;
-	if(inet_pton(AF_INET,ip,&ipv4_addr) == -1)
-	{
-		fprintf(stderr,"not an ipv4 address\n");
-	}
-	
-	struct in6_addr ipv6_addr;
-	if(inet_pton(AF_INET,ip,&ipv6_addr) == -1)
-	{
-		fprintf(stderr,"not an ipv6 address\n");
-	}
-	*/
-	
-	/*planned for future implementation: remove redundant code in dra_connect_to_address and dra_host_on_port by using a modified version of dra_create_socket function and some kind of dra_addrinfo_t struct to simplify storing address information.*/
 	int status;
 	struct addrinfo hints, *serverinfo, *ptr;
 	memset(&hints,0,sizeof(hints));
-	hints.ai_family = AF_UNSPEC;
+	hints.ai_family = sock->ip_version;
 	hints.ai_socktype = sock->socket_type;
 	hints.ai_flags = AI_PASSIVE;
 	
@@ -250,6 +235,10 @@ int dra_connect_to_address(dra_socket_t *sock, char const *ip, char const *port)
 		{
 			fprintf(stderr,"client: socket\n");
 			continue;
+		}
+		if(sock->socket_type == SOCK_DGRAM)
+		{
+			break;
 		}
 		if(connect(sock->socket_descriptor,ptr->ai_addr,ptr->ai_addrlen) == -1)
 		{
@@ -278,8 +267,7 @@ int dra_host_on_port(dra_socket_t *sock, char const *port)
 	int status;
 	struct addrinfo hints, *serverinfo, *ptr;
 	memset(&hints,0,sizeof(hints));
-	hints.ai_family = AF_UNSPEC;
-	//hints.ai_family = AF_INET;
+	hints.ai_family = sock->ip_version;
 	hints.ai_socktype = sock->socket_type;
 	hints.ai_flags = AI_PASSIVE;
 	
@@ -290,64 +278,6 @@ int dra_host_on_port(dra_socket_t *sock, char const *port)
 		return status;
 	}
 	
-	
-	#ifdef DRA_NET_USE_WINDOWS_HACK
-	/*
-		If you are on a windows system, give priority to IPV4 addresses so that machines that support ipv6 but have an ipv4 address don't find themselves stuck to only being able to communicate through localhost or ::1. The wonders of technology. Oh btw, if you do translate a public ivp4 to ipv6 form, it refuses connection INSTANTLY, which means that this is a windows specific thing.
-		
-		In the future, add a way to manually select if you want to give priority to IPv4 or IPv6 for the current machine, and make IPv4 the default, as that is what most people will use. All of this could be prevented if AF_UNSPEC worked the way it was meant to across all platforms, but this is not a perfect world.
-	*/
-	int socket_has_been_created = 0;
-	for(ptr = serverinfo; ptr != NULL; ptr = ptr->ai_next)
-	{
-		if(ptr->ai_family == AF_INET)
-		{
-			if((sock->socket_descriptor = socket(ptr->ai_family,ptr->ai_socktype,ptr->ai_protocol)) != -1)
-			{
-				if(bind(sock->socket_descriptor,ptr->ai_addr,ptr->ai_addrlen) != -1)
-				{
-					socket_has_been_created = 1;
-					break;
-				}
-				else
-				{
-					dra_close_socket(sock);
-					fprintf(stderr,"server: bind\n");
-				}
-			}
-			else
-			{
-				fprintf(stderr, "server: socket\n");
-			}
-		}
-	}
-	
-	if(socket_has_been_created == 0)
-	{
-		for(ptr = serverinfo; ptr != NULL; ptr = ptr->ai_next)
-		{
-			if(ptr->ai_family == AF_INET6)
-			{
-				if((sock->socket_descriptor = socket(ptr->ai_family,ptr->ai_socktype,ptr->ai_protocol)) != -1)
-				{
-					if(bind(sock->socket_descriptor,ptr->ai_addr,ptr->ai_addrlen) != -1)
-					{
-						break;
-					}
-					else
-					{
-						dra_close_socket(sock);
-						fprintf(stderr,"server: bind\n");
-					}
-				}
-				else
-				{
-					fprintf(stderr, "server: socket\n");
-				}
-			}
-		}
-	}
-	#else
 	for(ptr = serverinfo; ptr != NULL; ptr = ptr->ai_next)
 	{
 		if((sock->socket_descriptor = socket(ptr->ai_family,ptr->ai_socktype,ptr->ai_protocol)) == -1)
@@ -364,7 +294,6 @@ int dra_host_on_port(dra_socket_t *sock, char const *port)
 		}
 		break;
 	}
-	#endif
 	
 	
 	if(ptr == NULL)
@@ -378,11 +307,35 @@ int dra_host_on_port(dra_socket_t *sock, char const *port)
 	
 	freeaddrinfo(serverinfo);
 	
-	if(listen(sock->socket_descriptor,10) < 0)
+	if(sock->socket_type != SOCK_DGRAM)
 	{
-		fprintf(stderr,"could not listen...\n");
-		return 1;
+		if(listen(sock->socket_descriptor,10) < 0)
+		{
+			fprintf(stderr,"could not listen...\n");
+			return 1;
+		}
 	}
 	
 	return 0;
+}
+
+
+void dra_set_ipv(dra_socket_t *sock, int ipv)
+{
+	sock->ip_version = ipv;
+}
+
+void dra_set_ipv4(dra_socket_t *sock)
+{
+	dra_set_ipv(sock,AF_INET);
+}
+
+void dra_set_ipv6(dra_socket_t *sock)
+{
+	dra_set_ipv(sock,AF_INET6);
+}
+
+void dra_set_ipvall(dra_socket_t *sock)
+{
+	dra_set_ipv(sock,AF_UNSPEC);
 }
