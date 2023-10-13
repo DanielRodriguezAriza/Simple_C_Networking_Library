@@ -16,6 +16,7 @@ enum DRA_NET_STATUS
 	DRA_NET_INVALID_INPUT_ERROR,
 	DRA_NET_LISTEN_ERROR,
 	DRA_NET_NULL_PTR_ERROR,
+	DRA_NET_ACCEPT_ERROR,
 	
 	
 	
@@ -30,12 +31,13 @@ static char const * const DRA_NET_STATUS_STRING[] = {
 	"Unknown error.",
 	"Error creating a socket.",
 	"Error binding a socket.",
-	"Error connecting a socket.",
+	"Error connecting to a socket.",
 	"Error setting sockopt.",
 	"gai error",
 	"Function received invalid input.",
 	"Error listening to socket.",
-	"Function received a null pointer."
+	"Function received a null pointer.",
+	"Error accepting a socket connection."
 	
 };
 

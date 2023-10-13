@@ -195,8 +195,8 @@ int dra_net_connect_addr(dra_socket_t *sock, dra_address_t *addr, char const *ip
 	
 	if(addr != NULL)
 	{
-		addr->address = *((struct sockaddr_storage*)(ptr->ai_addr));
-		addr->address_len = sizeof(addr->address);
+		memcpy(&addr->address,ptr->ai_addr,ptr->ai_addrlen);
+		addr->address_len = ptr->ai_addrlen;
 	}
 	
 	freeaddrinfo(serverinfo);
@@ -256,8 +256,8 @@ int dra_net_host_addr(dra_socket_t *sock, dra_address_t *addr, char const *port,
 	
 	if(addr != NULL)
 	{
-		addr->address = *((struct sockaddr_storage*)(ptr->ai_addr));
-		addr->address_len = sizeof(addr->address);
+		memcpy(&addr->address,ptr->ai_addr,ptr->ai_addrlen);
+		addr->address_len = ptr->ai_addrlen;
 	}
 	
 	freeaddrinfo(serverinfo);
@@ -277,7 +277,7 @@ int dra_net_host_addr(dra_socket_t *sock, dra_address_t *addr, char const *port,
 int dra_net_accept_addr(dra_socket_t *server, dra_socket_t *client, dra_address_t *addr)
 {
 	client->socket_descriptor = accept(server->socket_descriptor,(struct sockaddr*)&(addr->address),&(addr->address_len));
-	return client->socket_descriptor;
+	return client->socket_descriptor == -1? DRA_NET_ACCEPT_ERROR : DRA_NET_OK;
 }
 
 int dra_net_connect(dra_socket_t *sock, char const *ip, char const *port)

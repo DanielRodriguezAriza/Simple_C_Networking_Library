@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "dra_net.h"
+#include "../dra_net.h"
 
 int main(int argc, char **argv)
 {
